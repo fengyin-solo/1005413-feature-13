@@ -7,9 +7,37 @@
       </div>
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记避险场所</button>
+        <button class="btn primary" type="button" @click="exportBooklets">按开放条件分册导出</button>
         <button class="btn" type="button" @click="exportRows">导出避险场所清单</button>
       </div>
     </header>
+
+    <section v-if="bookletResult" class="booklet-panel">
+      <h3>分册导出结果 · {{ bookletResult.exportedAt }}</h3>
+      <p class="booklet-line">
+        已生成 {{ bookletResult.files.length }} 个文件并逐个下载，可直接发乡镇；册内只列场所编号、可容纳人数、场所负责人、启用日期。
+      </p>
+      <ul class="booklet-list">
+        <li v-for="item in bookletResult.booklets" :key="`booklet-${item.condition}`">
+          开放条件「{{ item.condition }}」：{{ item.count }} 条 → {{ item.filename }}
+        </li>
+        <li v-for="item in bookletResult.notices" :key="`notice-${item.condition}`">
+          开放条件「{{ item.condition }}」：无符合导出条件的记录，已附说明文件 {{ item.filename }}（不给空册）
+        </li>
+      </ul>
+      <p v-if="bookletResult.calibrations.length" class="booklet-warn">
+        退回校准 {{ bookletResult.calibrations.length }} 条（可容纳人数精度不足）：
+        {{ bookletResult.calibrations.map((item) => item.场所编号).join('、') }}
+      </p>
+      <p class="booklet-line">
+        雨量站网已落实场所清单：新增 {{ bookletResult.ledger.added }} 条，更新 {{ bookletResult.ledger.updated }} 条；重复导出不会多出第二条。
+      </p>
+      <p v-if="bookletResult.mismatches.length" class="error-text">
+        开放条件两处比对对不上：
+        {{ bookletResult.mismatches.map((item) => `${item.场所编号}（清单「${item.清单开放条件}」≠ 台账「${item.台账开放条件}」）`).join('；') }}
+      </p>
+      <p v-else class="booklet-ok">开放条件两处比对：全部对得上。</p>
+    </section>
 
     <div class="stat-row">
       <article v-for="item in stats" :key="item.label" class="stat-card">
@@ -79,6 +107,8 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { downloadRefugeBooklets } from '@/api/refuge-booklets'
+import type { BookletExportResult } from '@/api/refuge-booklets'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('refuge')
@@ -91,6 +121,7 @@ const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
+const bookletResult = ref<BookletExportResult | null>(null)
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
@@ -106,6 +137,12 @@ function resetFilters() {
 
 function exportRows() {
   downloadEntries(meta.key)
+}
+
+function exportBooklets() {
+  errorMessage.value = ''
+  bookletResult.value = downloadRefugeBooklets()
+  reload()
 }
 
 function openCreate() {

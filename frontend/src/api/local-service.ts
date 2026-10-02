@@ -43,6 +43,20 @@ export function runAction(key: string, id: number, action: string): ActionResult
   if (current === target) {
     return { ok: false, message: `${meta.entity}已经是「${target}」，不用重复操作` }
   }
+  // 状态只能顺着元数据里登记的链路往前推进：目标状态的前一站必须是当前状态，不能跳级、不能回退。
+  const chain = meta.statuses
+  const targetIndex = chain.indexOf(target)
+  if (targetIndex > 0) {
+    const expected = chain[targetIndex - 1]
+    if (current !== expected) {
+      const path = chain.join(' → ')
+      const currentIndex = chain.indexOf(current)
+      if (currentIndex > targetIndex) {
+        return { ok: false, message: `${meta.entity}已是「${current}」，不能回退到「${target}」；状态只能按「${path}」顺序推进` }
+      }
+      return { ok: false, message: `${meta.entity}还在「${current}」，要先推进到「${expected}」才能${action}；状态只能按「${path}」顺序推进` }
+    }
+  }
   const lastStatus = meta.statuses[meta.statuses.length - 1]
   const updated: EntryRow = {
     ...rows[index],

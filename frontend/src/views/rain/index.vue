@@ -67,6 +67,42 @@
       <span>共 {{ total }} 条雨量站网记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
+
+    <section class="settlement-panel">
+      <h3 class="settlement-title">已落实场所（避险场所分册导出同步）</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>场所编号</th>
+            <th>开放条件</th>
+            <th>可容纳人数</th>
+            <th>场所负责人</th>
+            <th>启用日期</th>
+            <th>所属分册</th>
+            <th>落实时间</th>
+            <th>开放条件比对</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in settlements" :key="String(row.id)">
+            <td>{{ row['场所编号'] }}</td>
+            <td>{{ row['开放条件'] }}</td>
+            <td>{{ row['可容纳人数'] }}</td>
+            <td>{{ row['场所负责人'] }}</td>
+            <td>{{ row['启用日期'] }}</td>
+            <td>{{ row['册名'] }}</td>
+            <td>{{ row['落实时间'] }}</td>
+            <td :class="mismatchCodes.has(String(row['场所编号'])) ? 'error-text' : 'check-ok'">
+              {{ mismatchCodes.has(String(row['场所编号'])) ? '对不上' : '对得上' }}
+            </td>
+          </tr>
+          <tr v-if="!settlements.length">
+            <td colspan="8" class="empty-state">暂无已落实场所，待避险场所按开放条件分册导出后同步</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-if="settlements.length" class="settlement-summary">{{ settlementSummary }}</p>
+    </section>
   </section>
 </template>
 
@@ -79,6 +115,8 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { listSettlements, verifySettlements } from '@/api/refuge-booklets'
+import type { SettlementMismatch } from '@/api/refuge-booklets'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('rain')
@@ -91,6 +129,19 @@ const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
+const settlements = ref<EntryRow[]>([])
+const mismatches = ref<SettlementMismatch[]>([])
+const mismatchCodes = computed(() => new Set(mismatches.value.map((item) => item.场所编号)))
+const settlementSummary = computed(() => {
+  const totalCount = settlements.value.length
+  const badCount = mismatches.value.length
+  if (badCount === 0) {
+    return `与避险场所台账比对：${totalCount} 条已落实场所的开放条件全部对得上`
+  }
+  return `与避险场所台账比对：${badCount} 条开放条件对不上（${mismatches.value
+    .map((item) => `${item.场所编号}：清单「${item.清单开放条件}」≠ 台账「${item.台账开放条件}」`)
+    .join('；')}）`
+})
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
@@ -133,5 +184,13 @@ function reload() {
   }
 }
 
-onMounted(reload)
+function reloadSettlements() {
+  settlements.value = [...listSettlements()]
+  mismatches.value = verifySettlements()
+}
+
+onMounted(() => {
+  reload()
+  reloadSettlements()
+})
 </script>
