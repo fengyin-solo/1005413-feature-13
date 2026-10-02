@@ -7,9 +7,33 @@
       </div>
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记避险场所</button>
+        <button class="btn primary" type="button" @click="exportBooklets">按开放条件导出成册</button>
         <button class="btn" type="button" @click="exportRows">导出避险场所清单</button>
       </div>
     </header>
+
+    <section v-if="bookletResult" class="booklet-result">
+      <h3>汛前成册报送结果</h3>
+      <p class="booklet-message">{{ bookletResult.message }}</p>
+      <ul class="booklet-list">
+        <li v-for="item in bookletResult.booklets" :key="item.condition">
+          避险场所册-{{ item.condition }}.csv：{{ item.count }} 处场所（场所编号 / 可容纳人数 / 场所负责人 / 启用日期）
+        </li>
+        <li v-for="condition in bookletResult.emptyConditions" :key="condition">
+          避险场所册-{{ condition }}-说明.txt：该条件暂无记录，已附说明，未发空册
+        </li>
+      </ul>
+      <p v-if="bookletResult.returned.length" class="booklet-returned">
+        可容纳人数精度不够，已退回校准（优先于开放条件判定）：
+        {{ bookletResult.returned.map((item) => `${item.code}（${item.capacity || '未填'}）`).join('、') }}
+      </p>
+      <p class="booklet-rain">
+        雨量站网清单：{{ bookletResult.rainRow['站号'] }}「{{ bookletResult.rainRow['站点名称'] }}」
+        （{{ bookletResult.rainInserted ? '本次新增' : '已存在，本次仅更新，未多出记录' }}），
+        登记开放条件：{{ bookletResult.rainRow['所属流域'] }}；
+        两处比对{{ bookletResult.consistent ? '一致' : '不一致，请重新导出' }}。
+      </p>
+    </section>
 
     <div class="stat-row">
       <article v-for="item in stats" :key="item.label" class="stat-card">
@@ -79,6 +103,8 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { downloadRefugeBooklets } from '@/api/refuge-booklets'
+import type { RefugeBookletResult } from '@/api/refuge-booklets'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('refuge')
@@ -90,6 +116,7 @@ const stats = [{"label": "可启用场所", "value": 0}, {"label": "已启用场
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
+const bookletResult = ref<RefugeBookletResult | null>(null)
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
@@ -106,6 +133,12 @@ function resetFilters() {
 
 function exportRows() {
   downloadEntries(meta.key)
+}
+
+function exportBooklets() {
+  errorMessage.value = ''
+  bookletResult.value = downloadRefugeBooklets()
+  reload()
 }
 
 function openCreate() {

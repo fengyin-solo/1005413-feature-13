@@ -43,6 +43,15 @@ export function runAction(key: string, id: number, action: string): ActionResult
   if (current === target) {
     return { ok: false, message: `${meta.entity}已经是「${target}」，不用重复操作` }
   }
+  // 状态只能顺着 statuses 登记的次序往前走，不许跳回去。
+  const currentIndex = meta.statuses.indexOf(current)
+  const targetIndex = meta.statuses.indexOf(target)
+  if (currentIndex >= 0 && targetIndex >= 0 && targetIndex < currentIndex) {
+    return {
+      ok: false,
+      message: `${meta.entity}状态只能顺着「${meta.statuses.join('→')}」推进，不能从「${current}」退回「${target}」`,
+    }
+  }
   const lastStatus = meta.statuses[meta.statuses.length - 1]
   const updated: EntryRow = {
     ...rows[index],
